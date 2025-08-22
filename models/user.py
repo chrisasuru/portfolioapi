@@ -65,5 +65,21 @@ class UserCreate(UserBase):
         return self
 
 
+class UserUpdate(UserBase):
+
+    username: Optional[str] = Field(nullable = True, default = None)
+    email: Optional[EmailStr] = Field(nullable = True, default = None)
+    password: Optional[str] = Field(nullable = True, min_length = 8, max_length = 128, default = None)
+    confirm_password: Optional[str] = Field(nullable = True, min_length = 8, max_length = 128, default = None)
+
+    @model_validator(mode = "after")
+    def check_passwords_match(self):
+
+        if self.password and self.password != self.confirm_password:
+
+            raise ValueError("Passwords do not match.")
+        
+        return self
+
 
     
