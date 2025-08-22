@@ -1,5 +1,6 @@
 from sqlmodel import SQLModel, Field
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
+from pydantic import ConfigDict
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -9,28 +10,26 @@ RESERVED_USERNAMES = {"admin", "user", "test", "root"}
 
 class UserBase(SQLModel):
 
-    id: int | None = Field(default = None, primary_key = True)
     username: str = Field(index = True, unique = True, nullable = False)
     email: EmailStr = Field(index = True, unique = True, nullable = False)
     first_name: Optional[str] = Field(nullable = True, default = None)
     last_name: Optional[str] = Field(nullable = True, default = None)
+
+
+class User(UserBase, table = True):
+
+    id: int | None = Field(default = None, primary_key = True)
     date_joined: Optional[datetime] = Field(default_factory = lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = Field(default_factory = lambda: datetime.now(timezone.utc))
     is_active: bool = Field(default = True)
     is_superuser: bool = Field(default = False)
     is_staff: bool = Field(default = False)
-
-
-
-
-
-
-class User(UserBase, table = True):
-
     password : Optional[str] = Field(nullable = False, default = None)
 
 
 class UserRead(BaseModel):
+
+    model_config = ConfigDict(from_attributes=True)
     id: int
     username: str
     email: str
