@@ -4,6 +4,7 @@ from ..models.user import UserRead, UserCreate, UserUpdate, User
 from ..db import engine, get_session
 from ..core import utils
 from ..config import settings
+from ..core.security import oauth2_scheme
 from sqlmodel import Session, select
 from sqlalchemy import func
 
