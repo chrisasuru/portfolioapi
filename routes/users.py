@@ -95,3 +95,21 @@ async def update_user(username: str, user_data: UserUpdate, session: Session = D
     user = UserRead.model_validate(user)
 
     return user
+
+@users_router.delete("/users/{username}", status_code = status.HTTP_204_NO_CONTENT)
+async def delete_user(username: str, session: Session = Depends(get_session)):
+
+    statement = select(User).where(User.username == username)
+    user = session.exec(statement).first()
+
+    if not user:
+
+        raise HTTPException(
+            status_code = status.HTTP_404_NOT_FOUND,
+            detail = f"User with username '{username}' not found."
+        )
+    
+    session.delete(user)
+    session.commit()
+
+    return None
