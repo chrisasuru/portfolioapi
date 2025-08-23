@@ -1,19 +1,52 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi import status
-from ..models.user import UserRead, UserCreate, UserUpdate, User
+from ..models.user import UserRead, UserCreate, UserUpdate, AuthDetails, User
 from ..db import engine, get_session
 from ..core import utils
 from ..config import settings
-from ..core.security import oauth2_scheme
+from ..core.security import oauth2_scheme, get_current_user
 from sqlmodel import Session, select
 from sqlalchemy import func
+from datetime import datetime, timezone
+from typing import Annotated
+import jwt
 
 
 users_router = APIRouter()
 
 
+
+@users_router.post("/token")
+async def login(username: Annotated[str, Form()], password: Annotated[str, Form()], session: Session = Depends(get_session)):
+
+    statement = select(User).where(User.username == username)
+    user = session.exec(statement).first()
+
+    if not user or not utils.check_password(password, user.password):
+
+        raise HTTPException(
+            status_code = status.HTTP_401_UNAUTHORIZED,
+            detail = "Invalid username or password"
+        )
+    
+    user.last_login = datetime.now(timezone.utc)
+
+    access_token = jwt.encode(
+        {"sub": str(user.id)},
+        settings.SECRET_KEY,
+        algorithm="HS256"
+    )
+
+    return {
+        "access_token": access_token,
+        "token_type": "bearer"
+    }
+
+    
+
+
 @users_router.get("/users", response_model = utils.PaginatedResponse)
-async def list_users(page: int = 1, session: Session = Depends(get_session)):
+async def list_users(page: int = 1, current_user : str = Depends(get_current_user), session: Session = Depends(get_session)):
 
     offset = (page - 1) * settings.DEFAULT_PAGE_SIZE
 
@@ -27,8 +60,8 @@ async def list_users(page: int = 1, session: Session = Depends(get_session)):
     return utils.PaginatedResponse(
         results = users,
         count = count,
-        next = None,
-        previous = None
+        next = None if offset + settings.DEFAULT_PAGE_SIZE >= count else f"/v1/users?page={page + 1}",
+        previous = None if page <= 1 else f"/v1/users?page={page - 1}"
     )
 
 

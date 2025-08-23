@@ -82,4 +82,9 @@ class UserUpdate(UserBase):
         return self
 
 
+class AuthDetails(BaseModel):
+
+    username: str
+    password: str
+
     
