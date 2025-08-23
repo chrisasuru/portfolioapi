@@ -1,9 +1,9 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship
 from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from pydantic import ConfigDict
 from datetime import datetime, timezone
 from typing import Optional
-
+from .permission import RoleBase, UserRoleLink, PermissionBase, RolePermissionLink
 
 RESERVED_USERNAMES = {"admin", "user", "test", "root"}
 
@@ -25,6 +25,10 @@ class User(UserBase, table = True):
     is_superuser: bool = Field(default = False)
     is_staff: bool = Field(default = False)
     password : Optional[str] = Field(nullable = False, default = None)
+    roles: list["Role"] = Relationship(
+        back_populates = "users",
+        link_model = UserRoleLink
+    )
 
 
 class UserRead(BaseModel):
@@ -82,4 +86,22 @@ class UserUpdate(UserBase):
         return self
 
 
-    
+class Role(RoleBase, table = True):
+
+    id: int | None = Field(default = None, primary_key = True)
+    permissions: list["Permission"] = Relationship(
+        back_populates = "roles",
+        link_model = RolePermissionLink
+    )
+    users: list[User] = Relationship(
+        back_populates = "roles",
+        link_model = UserRoleLink
+    )
+
+class Permission(PermissionBase, table = True):
+
+    id: int | None = Field(default = None, primary_key = True)
+    roles: list["Role"] = Relationship(
+        back_populates = "permissions",
+        link_model = RolePermissionLink
+    )

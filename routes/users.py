@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi import status
-from ..models.user import UserRead, UserCreate, UserUpdate, AuthDetails, User
+from ..models.user import UserRead, UserCreate, UserUpdate, User
 from ..db import engine, get_session
 from ..core import utils
 from ..config import settings
