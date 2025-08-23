@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from .db import init_db
+from .db import init_db, destroy_db
 from .routes.users import users_router
 from .models.user import User
 
@@ -10,6 +10,7 @@ async def lifespan(app: FastAPI):
 
     init_db()
     yield
+    destroy_db()
 
 
 app = FastAPI(lifespan = lifespan)
