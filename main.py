@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from .db import init_db, destroy_db
+from .database.db import init_db, destroy_db
 from .routes.users import users_router
 from .models.user import User
 

@@ -3,8 +3,7 @@ from pydantic import BaseModel, EmailStr, field_validator, model_validator
 from pydantic import ConfigDict
 from datetime import datetime, timezone
 from typing import Optional
-from .permission import RoleBase, UserRoleLink, PermissionBase, RolePermissionLink
-
+from .permission import RoleBase, UserRoleLink, PermissionBase, RolePermissionLink, ResourcePermissionBase
 RESERVED_USERNAMES = {"admin", "user", "test", "root"}
 
 
@@ -22,14 +21,11 @@ class User(UserBase, table = True):
     date_joined: Optional[datetime] = Field(default_factory = lambda: datetime.now(timezone.utc))
     last_login: Optional[datetime] = Field(default_factory = lambda: datetime.now(timezone.utc))
     is_active: bool = Field(default = True)
-    is_superuser: bool = Field(default = False)
-    is_staff: bool = Field(default = False)
     password : Optional[str] = Field(nullable = False, default = None)
     roles: list["Role"] = Relationship(
         back_populates = "users",
         link_model = UserRoleLink
     )
-
 
 class UserRead(BaseModel):
 
@@ -105,3 +101,7 @@ class Permission(PermissionBase, table = True):
         back_populates = "permissions",
         link_model = RolePermissionLink
     )
+
+class ResourcePermission(ResourcePermissionBase, table = True):
+
+    id: int | None = Field(default = None, primary_key = True)

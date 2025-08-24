@@ -1,16 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi import status
-from ..models.user import UserRead, UserCreate, UserUpdate, User
-from ..db import engine, get_session
+from ..models.user import UserRead, UserCreate, UserUpdate, User, Role
+from ..database.init import PROFILE
+from ..database.db import engine, get_session
 from ..core import utils
 from ..config import settings
-from ..core.security import oauth2_scheme, get_current_user
+from ..core.security import oauth2_scheme, PermissionChecker, get_current_user, get_permission_checker
 from sqlmodel import Session, select
 from sqlalchemy import func
 from datetime import datetime, timezone
 from typing import Annotated
 import jwt
-
 
 users_router = APIRouter()
 
@@ -46,8 +46,16 @@ async def login(username: Annotated[str, Form()], password: Annotated[str, Form(
 
 
 @users_router.get("/users", response_model = utils.PaginatedResponse)
-async def list_users(page: int = 1, current_user : str = Depends(get_current_user), session: Session = Depends(get_session)):
+async def list_users(page: int = 1, current_user : User = Depends(get_current_user), session: Session = Depends(get_session), permission_checker: PermissionChecker = Depends(get_permission_checker)):
+    
 
+    
+    resource_type = User.__tablename__
+    has_perm = permission_checker.has_permissions(
+        current_user, 
+        'list', 
+        resource_type
+    )
     offset = (page - 1) * settings.DEFAULT_PAGE_SIZE
 
     count_statement = select(func.count(User.id))
@@ -74,6 +82,9 @@ async def create_user(user: UserCreate, session: Session = Depends(get_session))
     user_data["password"] = hashed_password
 
     user = User(**user_data)
+    role = session.exec(select(Role).where(Role.name == settings.DEFAULT_ROLE)).first()
+    
+    user.roles.append(role)
         
     session.add(user)
     session.commit()
