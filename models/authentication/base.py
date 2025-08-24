@@ -1,8 +1,16 @@
-from sqlmodel import SQLModel, Field, Relationship
-from pydantic import BaseModel
+from sqlmodel import SQLModel, Field
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import UniqueConstraint
+from pydantic import EmailStr
+
+class UserBase(SQLModel):
+
+    username: str = Field(index = True, unique = True, nullable = False)
+    email: EmailStr = Field(index = True, unique = True, nullable = False)
+    first_name: Optional[str] = Field(nullable = True, default = None)
+    last_name: Optional[str] = Field(nullable = True, default = None)
+
 
 class RolePermissionLink(SQLModel, table = True):
 
@@ -33,6 +41,7 @@ class PermissionBase(SQLModel):
     __table_args__ = (
         UniqueConstraint("action", "resource", ),
     )
+
 
 class ResourcePermissionBase(SQLModel):
 

@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from ..config import settings
 from ..database.db import get_session
-from ..models.user import UserRead, User, Role, Permission, ResourcePermission
+from ..models.authentication.models import User, Role, Permission, ResourcePermission
 from sqlalchemy import select
 from sqlmodel import Session
 import jwt
@@ -34,11 +34,13 @@ class PermissionChecker:
     def __init__(self, session: Session):
 
         self.session = session
-
     
-    def has_permissions(self, user: User, action : str, resource_type: str, resource_id : int = None):
-
+    def has_permission(self, user: User, action : str, resource_type: str, resource_id : int = None):
         # Filter based on roles and permissions
+        return True
+    
+    def has_object_permission(self, user: User):
+
         return True
 
 

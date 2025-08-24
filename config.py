@@ -13,6 +13,7 @@ class Settings:
     SECRET_KEY: str = os.getenv("SECRET_KEY")
     DEFAULT_ROLE: str = "user"
     SUPER_ADMIN_ROLE: str = "super_admin"
+    RESERVED_USERNAMES: str = ['admin', 'user', 'test', 'root', 'super_user']
 
 
 settings = Settings()

@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi import status
-from ..models.user import UserRead, UserCreate, UserUpdate, User, Role
-from ..database.init import PROFILE
+from ..models.authentication.models import User, Role
+from ..schemas.users import UserRead, UserCreate, UserUpdate
+from ..database.setup import PROFILE
 from ..database.db import engine, get_session
 from ..core import utils
 from ..config import settings

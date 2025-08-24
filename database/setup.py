@@ -1,7 +1,8 @@
-from ..models.user import Role, Permission, ResourcePermission, User
+from ..models.authentication.models import Role, Permission, ResourcePermission, User
 from sqlmodel import Session, select
 from ..config import settings
 from ..core import utils
+from pydantic import EmailStr
 import os
 
 CREATE = "create"
@@ -26,6 +27,10 @@ class RBACInitializer:
     def __init__(self, session: Session):
 
         self.session = session
+
+    def populate(self):
+
+        return True
 
     def create_permissions(self):
 
@@ -109,7 +114,7 @@ class RBACInitializer:
 
         return created_roles
     
-    def create_super_admin(self):
+    def create_super_admin_user(self, username: str, email: EmailStr, password: str):
 
         role = self.session.exec(select(Role).where(Role.name == settings.SUPER_ADMIN_ROLE)).first()
         
