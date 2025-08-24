@@ -4,6 +4,7 @@ from ..models.authentication.models import User, Role
 from ..schemas.users import UserRead, UserCreate, UserUpdate
 from ..database.setup import PROFILE
 from ..database.db import engine, get_session
+from ..database.crud.users import CRUDUser
 from ..core import utils
 from ..config import settings
 from ..core.security import oauth2_scheme, PermissionChecker, get_current_user, get_permission_checker
@@ -14,6 +15,9 @@ from typing import Annotated
 import jwt
 
 users_router = APIRouter()
+
+
+crud_user = CRUDUser()
 
 
 
@@ -75,21 +79,9 @@ async def list_users(page: int = 1, current_user : User = Depends(get_current_us
 
 
 @users_router.post("/users", status_code = status.HTTP_201_CREATED, response_model = UserRead)
-async def create_user(user: UserCreate, session: Session = Depends(get_session)):
-    
-    hashed_password = utils.hash_password(user.password)
+async def create_user(user_data: UserCreate, session: Session = Depends(get_session)):
 
-    user_data = user.model_dump(exclude={"confirm_password", "password"})
-    user_data["password"] = hashed_password
-
-    user = User(**user_data)
-    role = session.exec(select(Role).where(Role.name == settings.DEFAULT_ROLE)).first()
-    
-    user.roles.append(role)
-        
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+    user = crud_user.create(session, user_data)
 
     user = UserRead.model_validate(user)
         
@@ -98,15 +90,7 @@ async def create_user(user: UserCreate, session: Session = Depends(get_session))
 @users_router.get("/users/{username}", response_model = UserRead)
 async def get_user(username: str, session: Session = Depends(get_session)):
 
-    statement = select(User).where(User.username == username)
-    user = session.exec(statement).first()
-
-    if not user:
-
-        raise HTTPException(
-            status_code = status.HTTP_404_NOT_FOUND,
-            detail = f"User with username '{username}' not found."
-        ) 
+    user = crud_user.get(session, username = username)
     
     user = UserRead.model_validate(user)
 
@@ -115,28 +99,7 @@ async def get_user(username: str, session: Session = Depends(get_session)):
 @users_router.put("/users/{username}", response_model = UserRead)
 async def update_user(username: str, user_data: UserUpdate, session: Session = Depends(get_session)):
 
-    statement = select(User).where(User.username == username)
-    user = session.exec(statement).first()
-
-    if not user:
-
-        raise HTTPException(
-            status_code = status.HTTP_404_NOT_FOUND,
-            detail = f"User with username '{username}' not found."
-        )
-    
-    if user_data.password and user_data.confirm_password:
-
-        user.password = utils.hash_password(user_data.password)
-
-    user.username = user_data.username if user_data.username else user.username
-    user.email = user_data.email if user_data.email else user.email
-    user.first_name = user_data.first_name if user_data.first_name else user.first_name
-    user.last_name = user_data.last_name if user_data.last_name else user.last_name
-
-    session.add(user)
-    session.commit()
-    session.refresh(user)
+    crud_user.update(session, user_data, username = None)
 
     user = UserRead.model_validate(user)
 
@@ -145,17 +108,6 @@ async def update_user(username: str, user_data: UserUpdate, session: Session = D
 @users_router.delete("/users/{username}", status_code = status.HTTP_204_NO_CONTENT)
 async def delete_user(username: str, session: Session = Depends(get_session)):
 
-    statement = select(User).where(User.username == username)
-    user = session.exec(statement).first()
-
-    if not user:
-
-        raise HTTPException(
-            status_code = status.HTTP_404_NOT_FOUND,
-            detail = f"User with username '{username}' not found."
-        )
-    
-    session.delete(user)
-    session.commit()
+    crud_user.delete(session, username = username)
 
     return None
