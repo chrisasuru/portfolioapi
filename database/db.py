@@ -7,7 +7,8 @@ from .setup import RBACInitializer
 
 engine = create_engine(
     settings.DATABASE_URL, 
-    echo = settings.DEBUG
+    echo = settings.DEBUG,
+    connect_args={"check_same_thread": False} if settings.DEBUG else None
 )
 
 

@@ -1,38 +1,89 @@
 import pytest
 from fastapi.testclient import TestClient
-from ..main import app
 from sqlmodel import create_engine, Session, SQLModel
-from ..models.authentication.user import User, Permission, ResourcePermission, Role
 from ..database.db import get_session
+from ..core.security import get_authenticated_user
 from ..database.setup import RBACInitializer
-
-TEST_DATABASE_URL = "sqlite:///./test.db" 
-
-
-engine = create_engine(
-    TEST_DATABASE_URL, 
-    connect_args={"check_same_thread": False},
-    echo = True
-)
+from ..models.authentication.models import User, Role, Permission
+from sqlmodel.pool import StaticPool
+from ..core import utils
+from ..main import app
 
 
-def get_test_session(engine):
 
+
+@pytest.fixture(name="session")
+def session_fixture():
+    # Setup: Create test database
+    engine = create_engine(
+        "sqlite:///:memory:",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool
+    )
+    SQLModel.metadata.create_all(engine)
+
+    
     with Session(engine) as session:
 
-        yield session
+        rbac = RBACInitializer(session)
+        rbac.populate()
+        yield session  # Pass this session to tests
+    
+@pytest.fixture(name="client")
+def client_fixture(session):
 
-app.dependency_overrides[get_session] = get_test_session
+    def get_session_override():
 
-@pytest.fixture(scope="function")
-def setup_test_db():
-    # Create tables before each test
-    SQLModel.metadata.create_all(engine)
-    RBACInitializer(get_test_session(engine)).populate()
-    yield
-    # Drop tables after each test
-    SQLModel.metadata.drop_all(bind=engine)
+        return session
+    
+    def get_authenticated_user_override():
 
-client = TestClient(app)
+        return None
+    
+    app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[get_authenticated_user] = get_authenticated_user_override
 
+    yield TestClient(app)
+    
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture(name="test_user")
+def test_user_fixture(session):
+
+    rbac = RBACInitializer(session)
+    rbac.populate()  # This should create default roles
+    
+    # Create test user
+    user = User(
+        username="testuser",
+        email="test@example.com", 
+        password= utils.hash_password('password'),
+        first_name="Test",
+        last_name="User"
+    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    
+    return user
+
+@pytest.fixture(name = "authenticated_client")
+def authenticated_client_fixture(session, test_user):
+
+    def get_session_override():
+
+        return session
+    
+    def get_authenticated_user_override():
+
+        return test_user
+    
+
+    app.dependency_overrides[get_session] = get_session_override
+    app.dependency_overrides[get_authenticated_user] = get_authenticated_user_override
+
+    yield TestClient(app)
+
+    app.dependency_overrides.clear()
 

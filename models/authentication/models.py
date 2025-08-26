@@ -1,7 +1,7 @@
 from sqlmodel import SQLModel, Field, Relationship
 from datetime import datetime, timezone
 from typing import Optional
-from .base import RoleBase, PermissionBase, ResourcePermissionBase, RolePermissionLink, UserBase, UserRoleLink
+from .base import RoleBase, PermissionBase, RolePermissionLink, UserBase, UserRoleLink
 
 class User(UserBase, table = True):
 
@@ -21,6 +21,7 @@ class Role(RoleBase, table = True):
 
 
     id: int | None = Field(default = None, primary_key = True)
+
     permissions: list["Permission"] = Relationship(
         back_populates = "roles",
         link_model = RolePermissionLink
@@ -39,7 +40,3 @@ class Permission(PermissionBase, table = True):
         back_populates = "permissions",
         link_model = RolePermissionLink
     )
-
-class ResourcePermission(ResourcePermissionBase, table = True):
-
-    id: int | None = Field(default = None, primary_key = True)

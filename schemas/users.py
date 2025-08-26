@@ -1,9 +1,11 @@
-from sqlmodel import Field
-from pydantic import BaseModel, EmailStr, field_validator, model_validator, ConfigDict
+from pydantic import BaseModel, EmailStr, field_validator, model_validator, ConfigDict, Field
 from typing import Optional
 from ..config import settings
 from ..models.authentication.base import UserBase
 from datetime import datetime
+
+    
+
 
 class UserRead(BaseModel):
 

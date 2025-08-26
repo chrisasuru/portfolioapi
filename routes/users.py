@@ -1,24 +1,18 @@
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi import status
 from ..models.authentication.models import User, Role
+from ..factories.user_factory import UserFactory
 from ..schemas.users import UserRead, UserCreate, UserUpdate
-from ..database.setup import PROFILE
 from ..database.db import engine, get_session
-from ..database.crud.users import CRUDUser
 from ..core import utils
 from ..config import settings
-from ..core.security import oauth2_scheme, PermissionChecker, get_current_user, get_permission_checker
+from ..core.security import generate_access_token, require_permission, get_authenticated_user
 from sqlmodel import Session, select
 from sqlalchemy import func
 from datetime import datetime, timezone
 from typing import Annotated
-import jwt
 
 users_router = APIRouter()
-
-
-crud_user = CRUDUser()
-
 
 
 @users_router.post("/token")
@@ -36,11 +30,11 @@ async def login(username: Annotated[str, Form()], password: Annotated[str, Form(
     
     user.last_login = datetime.now(timezone.utc)
 
-    access_token = jwt.encode(
-        {"sub": str(user.id)},
-        settings.SECRET_KEY,
-        algorithm="HS256"
-    )
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    access_token = generate_access_token(user.id)
 
     return {
         "access_token": access_token,
@@ -51,16 +45,10 @@ async def login(username: Annotated[str, Form()], password: Annotated[str, Form(
 
 
 @users_router.get("/users", response_model = utils.PaginatedResponse)
-async def list_users(page: int = 1, current_user : User = Depends(get_current_user), session: Session = Depends(get_session), permission_checker: PermissionChecker = Depends(get_permission_checker)):
-    
+async def list_users(page: int = 1, 
+                     session: Session = Depends(get_session), 
+                     has_permission : bool = Depends(require_permission("user", "list"))):
 
-    
-    resource_type = User.__tablename__
-    has_perm = permission_checker.has_permissions(
-        current_user, 
-        'list', 
-        resource_type
-    )
     offset = (page - 1) * settings.DEFAULT_PAGE_SIZE
 
     count_statement = select(func.count(User.id))
@@ -79,35 +67,46 @@ async def list_users(page: int = 1, current_user : User = Depends(get_current_us
 
 
 @users_router.post("/users", status_code = status.HTTP_201_CREATED, response_model = UserRead)
-async def create_user(user_data: UserCreate, session: Session = Depends(get_session)):
-
-    user = crud_user.create(session, user_data)
-
-    user = UserRead.model_validate(user)
-        
-    return user
-
-@users_router.get("/users/{username}", response_model = UserRead)
-async def get_user(username: str, session: Session = Depends(get_session)):
-
-    user = crud_user.get(session, username = username)
+async def create_user(user_data: UserCreate, 
+                      session: Session = Depends(get_session),
+                      has_permission : bool = Depends(require_permission("user", "create"))):
     
-    user = UserRead.model_validate(user)
+    
+    created_user = UserFactory(session).create_user(user_data)
+
+    created_user_schema = UserRead.model_validate(created_user)
+        
+    return created_user_schema
+
+@users_router.get("/users/{user_id}", response_model = UserRead)
+async def get_user(user_id: int, 
+                   session: Session = Depends(get_session),
+                   has_permission : bool = Depends(require_permission("user", "read"))):
+
+    user = UserFactory(session).get_user_by_id(user_id)
+    
+    user_schema = UserRead.model_validate(user)
+
+    return user_schema
+
+@users_router.put("/users/{user_id}", response_model = UserRead)
+async def update_user(user_id: int, 
+                      user_data: UserUpdate, 
+                      session: Session = Depends(get_session),
+                      has_permission : bool = Depends(require_permission("user", "update"))):
+
+    updated_user = UserFactory(session).update_user(user_id, user_data)
+
+    updated_user_schema = UserRead.model_validate(updated_user)
+
+    return updated_user_schema
+
+@users_router.delete("/users/{user_id}", status_code = status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int, 
+                      session: Session = Depends(get_session),
+                      has_permission : bool = Depends(require_permission("user", "delete"))):
+
+
+    user = UserFactory(session).delete_user(user_id)
 
     return user
-
-@users_router.put("/users/{username}", response_model = UserRead)
-async def update_user(username: str, user_data: UserUpdate, session: Session = Depends(get_session)):
-
-    crud_user.update(session, user_data, username = None)
-
-    user = UserRead.model_validate(user)
-
-    return user
-
-@users_router.delete("/users/{username}", status_code = status.HTTP_204_NO_CONTENT)
-async def delete_user(username: str, session: Session = Depends(get_session)):
-
-    crud_user.delete(session, username = username)
-
-    return None

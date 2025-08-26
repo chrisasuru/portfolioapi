@@ -1,4 +1,11 @@
-from ..models.authentication.models import Role, Permission, ResourcePermission, User
+from ..models.authentication.models import Role, Permission, User
+from sqlmodel import Session, select
+from ..config import settings
+from ..core import utils
+from pydantic import EmailStr
+import os
+
+from ..models.authentication.models import Role, Permission, User, UserRoleLink
 from sqlmodel import Session, select
 from ..config import settings
 from ..core import utils
@@ -15,154 +22,149 @@ ASSIGN = "assign"
 REVOKE = "revoke"
 ACTIVATE = "activate"
 
+ALWAYS = 'always'
+OWNER = 'owner'
+
 USER = User.__tablename__
 ROLE = Role.__tablename__
 PERMISSION = Permission.__tablename__
-PROFILE = "profile"
-
 
 class RBACInitializer:
 
-
     def __init__(self, session: Session):
-
         self.session = session
 
     def populate(self):
+        self.create_permissions()
+        self.create_roles()
+
+        # You must also create the users here to ensure they are created in the same session
+        self.create_super_admin_user()
+        self.create_admin_user()
+        self.create_basic_user()
 
         return True
 
     def create_permissions(self):
-
-        created_permissions = {}
-
         permissions_data = [
-            (CREATE, PERMISSION, 'Create permissions'),
-            (READ, PERMISSION, 'Read permissions'),
-            (UPDATE, PERMISSION, 'Update permission data'),
-            (DELETE, PERMISSION, 'Delete permissions'),
-            (LIST, PERMISSION, 'List permissions'),
-            (ASSIGN, PERMISSION, 'Assign permissions'),
-            (REVOKE, PERMISSION, 'Revoke permissions'),
-            (CREATE, ROLE, 'Create roles'),
-            (READ, ROLE, 'Create role'),
-            (UPDATE, ROLE, 'Update role data'),
-            (DELETE, ROLE, 'Delete role data'),
-            (LIST, ROLE, 'List roles'),
-            (ASSIGN, ROLE, 'Assign roles'),
-            (REVOKE, ROLE, 'Revoke roles'),
-            (CREATE, USER, 'Create users'),
-            (READ, USER, 'Read user data'),
-            (UPDATE, USER, 'Update user data'),
-            (DELETE, USER, 'Delete users'),
-            (LIST, USER, 'List users'),
-            (ACTIVATE, USER, 'Activate/deactivate users'),
-            (READ, PROFILE, "Read their own profile"),
-            (UPDATE, PROFILE, "Update their own profile")
+            (CREATE, PERMISSION, 'Create permissions', ALWAYS),
+            (READ, PERMISSION, 'Read permissions', ALWAYS),
+            (UPDATE, PERMISSION, 'Update permission data', ALWAYS),
+            (DELETE, PERMISSION, 'Delete permissions', ALWAYS),
+            (LIST, PERMISSION, 'List permissions', ALWAYS),
+            (ASSIGN, PERMISSION, 'Assign permissions', ALWAYS),
+            (REVOKE, PERMISSION, 'Revoke permissions', ALWAYS),
+            (CREATE, ROLE, 'Create roles', ALWAYS),
+            (READ, ROLE, 'Create role', ALWAYS),
+            (UPDATE, ROLE, 'Update role data', ALWAYS),
+            (DELETE, ROLE, 'Delete role data', ALWAYS),
+            (LIST, ROLE, 'List roles', ALWAYS),
+            (ASSIGN, ROLE, 'Assign roles', ALWAYS),
+            (REVOKE, ROLE, 'Revoke roles', ALWAYS),
+            (CREATE, USER, 'Create users', ALWAYS),
+            (READ, USER, 'Read user data', ALWAYS),
+            (UPDATE, USER, 'Update user data', ALWAYS),
+            (DELETE, USER, 'Delete users', ALWAYS),
+            (LIST, USER, 'List users', ALWAYS),
+            (IMPERSONATE, USER, 'Impersonate users', ALWAYS),
+            (ACTIVATE, USER, 'Activate/deactivate users', ALWAYS),
+            (READ, USER, "Read their own profile", OWNER),
+            (UPDATE, USER, "Update their own profile", OWNER)
         ]
 
-        for action, resource, description in permissions_data:
-            
-            name = f"{action}_{resource}"
-            existing = self.session.exec(select(Permission).where(Permission.name == name, Permission.resource == resource)).first()
-        
+        for action, resource, description, condition in permissions_data:
+            name = f"{action}_{resource}_{condition}"
+            existing = self.session.exec(
+                select(Permission).where(Permission.name == name, Permission.resource == resource)
+            ).first()
             if not existing:
                 try:
-
-                    permission = self._create_permission(name, action, description, resource)
+                    permission = self._create_permission(name, action, description, resource, condition)
+                    # No need to return anything, the method handles persistence
                 except Exception as e:
-
                     print(e)
-            created_permissions[name] = True
-        
-        return created_permissions
-        
     
     def create_roles(self):
-
-        created_roles = {}
-
         roles_data = {
             "super_admin": ("Ultimate system control - can do anything.", "ALL"),
             "admin":("User administration - can create, read, update and delete users, roles, and permissions", [
-                (CREATE, USER), (READ, USER), (UPDATE, USER), 
-                (DELETE, USER), (LIST, USER), (ACTIVATE, USER), 
-                (READ, PROFILE), (UPDATE, PROFILE),
-                (CREATE, ROLE), (READ, ROLE), (UPDATE, ROLE), (DELETE, ROLE),
-                (LIST, ROLE), (REVOKE, ROLE), (ASSIGN, ROLE),
-                (CREATE, PERMISSION), (READ, PERMISSION), 
-                (UPDATE, PERMISSION), (DELETE, PERMISSION),
-                (LIST,PERMISSION), (ASSIGN, PERMISSION),
-                (REVOKE, PERMISSION)
+                (CREATE, USER, ALWAYS), (READ, USER, ALWAYS), (UPDATE, USER, ALWAYS), 
+                (DELETE, USER, ALWAYS), (LIST, USER, ALWAYS), (ACTIVATE, USER, ALWAYS), 
+                (IMPERSONATE, USER, ALWAYS),
+                (CREATE, ROLE, ALWAYS), (READ, ROLE, ALWAYS), (UPDATE, ROLE, ALWAYS), (DELETE, ROLE, ALWAYS),
+                (LIST, ROLE, ALWAYS), (REVOKE, ROLE, ALWAYS), (ASSIGN, ROLE, ALWAYS),
+                (CREATE, PERMISSION, ALWAYS), (READ, PERMISSION, ALWAYS), 
+                (UPDATE, PERMISSION, ALWAYS), (DELETE, PERMISSION, ALWAYS),
+                (LIST,PERMISSION, ALWAYS), (ASSIGN, PERMISSION, ALWAYS),
+                (REVOKE, PERMISSION, ALWAYS)
             ]),
             "user":("Normal user - can read, update, and delete their own profile.", [
-                (READ, PROFILE), (UPDATE, PROFILE)
+                (READ, USER, OWNER), (UPDATE, USER, OWNER)
             ])
-            
         }
 
         for name, (description, permissions) in roles_data.items():
-
-
             existing = self.session.exec(select(Role).where(Role.name == name)).first()
-            
             if not existing:
-                
-                role = self._create_role(name, description, permissions)
-
-            created_roles[name] = True
-
-        return created_roles
+                self._create_role(name, description, permissions)
     
-    def create_super_admin_user(self, username: str, email: EmailStr, password: str):
-
-        role = self.session.exec(select(Role).where(Role.name == settings.SUPER_ADMIN_ROLE)).first()
-        
-        hashed_password = utils.hash_password('password')
-
-        admin_exists = self.session.exec(select(User.username).where(User.username == 'admin')).first()
-
-        if admin_exists:
-
-            return
-
-        admin = User(username = "admin", email = "admin@example.com", password = hashed_password)
-        admin.roles.append(role)
-        
-        self.session.add(admin)
-        self.session.commit()
-
-    def _create_permission(self, name: str, action: str, description: str, resource:str) -> Permission:
-
-        permission = Permission(name = name, action = action, description = description, resource = resource)
+    def _create_permission(self, name: str, action: str, description: str, resource: str, condition: str) -> Permission:
+        permission = Permission(name=name, action=action, description=description, resource=resource, condition=condition)
         self.session.add(permission)
         self.session.commit()
-
         return permission
-    
-    def _create_role(self, name: str, description: str, permissions : list | tuple):
- 
-        role = Role(name = name, description = description)
 
-        if name != settings.SUPER_ADMIN_ROLE:
-
-            for action, resource in permissions:
-
-                permission_name = f"{action}_{resource}"
-
-
-                permission = self.session.exec(select(Permission).where(Permission.name == permission_name, Permission.action == action, Permission.resource == resource)).first()
-                role.permissions.append(permission)
-        
-        
-        self.session.add(role)
+    def _create_role(self, name: str, description: str, permissions: list | tuple):
+        role = Role(name=name, description=description)
+        self.session.add(role) # Add the role to the session before assigning permissions
         self.session.commit()
-
+        
+        if permissions != "ALL":
+            for action, resource, condition in permissions:
+                permission_name = f"{action}_{resource}_{condition}"
+                statement = select(Permission).where(
+                    Permission.name == permission_name, 
+                    Permission.action == action, 
+                    Permission.resource == resource,
+                    Permission.condition == condition
+                )
+                permission = self.session.exec(statement).first()
+                if permission:
+                    # Append the permission using the relationship list
+                    role.permissions.append(permission)
+        
+        # We need to commit again to save the permissions added to the role
+        self.session.commit()
         return role
-    
 
+    def _create_base_user(self, username: str, email: EmailStr, password: str, role_name: str):
+        hashed_password = utils.hash_password(password)
+        user = User(username=username, email=email, password=hashed_password)
+        
+        role = self.session.exec(select(Role).where(Role.name == role_name)).first()
+        if role:
+            # Append the role to the user's roles relationship list
+            user.roles.append(role)
+        
+        self.session.add(user)
+        self.session.commit()
+        self.session.refresh(user)
+        return user
 
+    def create_basic_user(self, username="user", email="user@example.com", password="password"):
+        existing_user = self.session.exec(select(User).where(User.username == username)).first()
+        if not existing_user:
+            return self._create_base_user(username, email, password, settings.DEFAULT_USER_ROLE)
+        return existing_user
 
-    
+    def create_super_admin_user(self, username="super_admin", email="super_admin@example.com", password="password"):
+        existing_user = self.session.exec(select(User).where(User.username == username)).first()
+        if not existing_user:
+            return self._create_base_user(username, email, password, settings.SUPER_ADMIN_USER_ROLE)
+        return existing_user
 
-
+    def create_admin_user(self, username="admin", email="admin@example.com", password="password"):
+        existing_user = self.session.exec(select(User).where(User.username == username)).first()
+        if not existing_user:
+            return self._create_base_user(username, email, password, settings.ADMIN_USER_ROLE)
+        return existing_user
