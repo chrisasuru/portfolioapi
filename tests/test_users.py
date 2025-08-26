@@ -1,7 +1,7 @@
-from ..models.authentication.models import User, Role, Permission
+from ..models.auth.user import User 
+from ..models.auth.role import Role 
+from ..models.auth.permission import Permission
 from sqlmodel import select
-from ..database.setup import RBACInitializer
-from ..core import utils
 from fastapi import status
 
 

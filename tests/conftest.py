@@ -2,9 +2,11 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlmodel import create_engine, Session, SQLModel, select
 from ..database.db import get_session
-from ..core.security import get_authenticated_user
+from ..core.security import get_current_user
 from ..database.setup import RBACInitializer
-from ..models.authentication.models import User, Role, Permission
+from ..models.auth.user import User 
+from ..models.auth.role import Role
+from ..models.auth.permission import Permission
 from sqlmodel.pool import StaticPool
 from ..core import utils
 from ..main import app
@@ -36,12 +38,12 @@ def client_fixture(session):
 
         return session
     
-    def get_authenticated_user_override():
+    def get_current_user_override():
 
         return None
     
     app.dependency_overrides[get_session] = get_session_override
-    app.dependency_overrides[get_authenticated_user] = get_authenticated_user_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
 
     yield TestClient(app)
     
@@ -72,13 +74,13 @@ def authenticated_client_fixture(session, test_user):
 
         return session
     
-    def get_authenticated_user_override():
+    def get_current_user_override():
 
         return test_user
     
 
     app.dependency_overrides[get_session] = get_session_override
-    app.dependency_overrides[get_authenticated_user] = get_authenticated_user_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
 
     yield TestClient(app)
 
@@ -133,13 +135,13 @@ def test_admin_authenticated_client_fixture(session, test_admin_user):
 
         return session
     
-    def get_authenticated_user_override():
+    def get_current_user_override():
 
         return test_admin_user
     
 
     app.dependency_overrides[get_session] = get_session_override
-    app.dependency_overrides[get_authenticated_user] = get_authenticated_user_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
 
     yield TestClient(app)
 
@@ -153,17 +155,18 @@ def test_super_admin_authenticated_client_fixture(session, test_super_admin_user
 
         return session
     
-    def get_authenticated_user_override():
+    def get_current_user_override():
 
         return test_super_admin_user
     
 
     app.dependency_overrides[get_session] = get_session_override
-    app.dependency_overrides[get_authenticated_user] = get_authenticated_user_override
+    app.dependency_overrides[get_current_user] = get_current_user_override
 
     yield TestClient(app)
 
     app.dependency_overrides.clear()
+
 
 
 

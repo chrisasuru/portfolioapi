@@ -1,13 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Form
 from fastapi import status
-from ..models.authentication.models import User, Role
-from ..factories.user_factory import UserFactory
+from ..models.auth.user import User
+from ..services.auth.users_service import UserService
 from ..schemas.users import UserRead, UserCreate, UserUpdate
 from ..database.db import engine, get_session
 from ..database.setup import OWNER
 from ..core import utils
 from ..config import settings
-from ..core.security import generate_access_token, require_permission, get_authenticated_user
+from ..core.security import generate_access_token, require_permission, get_current_user
 from sqlmodel import Session, select
 from sqlalchemy import func
 from datetime import datetime, timezone
@@ -73,7 +73,7 @@ async def create_user(user_data: UserCreate,
                       has_permission : bool = Depends(require_permission("user", "create"))):
     
     
-    created_user = UserFactory(session).create_user(user_data)
+    created_user = UserService.create_user(session, user_data)
 
     created_user_schema = UserRead.model_validate(created_user)
         
@@ -87,7 +87,7 @@ async def get_user(user_id: int,
                           condition = OWNER, 
                           resource_param = "user_id"))):
 
-    user = UserFactory(session).get_user_by_id(user_id)
+    user = UserService.get_user_by_id(session, user_id)
     
     user_schema = UserRead.model_validate(user)
 
@@ -102,7 +102,7 @@ async def update_user(user_id: int,
                           condition = OWNER, 
                           resource_param = "user_id"))):
 
-    updated_user = UserFactory(session).update_user(user_id, user_data)
+    updated_user = UserService.update_user(session, user_id, user_data)
 
     updated_user_schema = UserRead.model_validate(updated_user)
 
@@ -116,6 +116,6 @@ async def delete_user(user_id: int,
                           condition = OWNER, 
                           resource_param = "user_id"))):
 
-    user = UserFactory(session).delete_user(user_id)
+    user = UserService.delete_user(session, user_id)
 
     return user

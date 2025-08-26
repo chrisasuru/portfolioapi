@@ -1,10 +1,7 @@
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, ConfigDict, Field
 from typing import Optional
 from ..config import settings
-from ..models.authentication.base import UserBase
 from datetime import datetime
-
-    
 
 
 class UserRead(BaseModel):
@@ -21,8 +18,12 @@ class UserRead(BaseModel):
 
 
 
-class UserCreate(UserBase):
+class UserCreate(BaseModel):
 
+    username: str = Field(nullable = False, default = None)
+    email: EmailStr = Field(nullable = False, default = None)
+    first_name: Optional[str] = Field(nullable = True, default = None)
+    last_name: Optional[str] = Field(nullable = True, default = None)
     password: str = Field(nullable = False, min_length = 8, max_length = 128)
     confirm_password: str = Field(nullable = False, min_length = 8, max_length = 128)
 
@@ -46,10 +47,12 @@ class UserCreate(UserBase):
         return self
 
 
-class UserUpdate(UserBase):
+class UserUpdate(BaseModel):
 
     username: Optional[str] = Field(nullable = True, default = None)
     email: Optional[EmailStr] = Field(nullable = True, default = None)
+    first_name: Optional[str] = Field(nullable = True, default = None)
+    last_name: Optional[str] = Field(nullable = True, default = None)
     password: Optional[str] = Field(nullable = True, min_length = 8, max_length = 128, default = None)
     confirm_password: Optional[str] = Field(nullable = True, min_length = 8, max_length = 128, default = None)
 

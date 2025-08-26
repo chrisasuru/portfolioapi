@@ -1,11 +1,6 @@
-from ..models.authentication.models import Role, Permission, User
-from sqlmodel import Session, select
-from ..config import settings
-from ..core import utils
-from pydantic import EmailStr
-import os
-
-from ..models.authentication.models import Role, Permission, User, UserRoleLink
+from ..models.auth.user import User 
+from ..models.auth.permission import Permission 
+from ..models.auth.role import Role 
 from sqlmodel import Session, select
 from ..config import settings
 from ..core import utils

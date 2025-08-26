@@ -3,7 +3,9 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status, Request
 from ..config import settings
 from ..database.db import get_session
-from ..models.authentication.models import User, Role, Permission
+from ..models.auth.user import User 
+from ..models.auth.role import Role
+from ..models.auth.permission import Permission
 from sqlmodel import SQLModel
 from datetime import datetime, timedelta, timezone
 from sqlmodel import Session, select, and_
@@ -38,7 +40,7 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/v1/token")
 
 
 
-async def get_authenticated_user(request: Request, session: Session = Depends(get_session)) -> User | None:
+async def get_current_user(request: Request, session: Session = Depends(get_session)) -> User | None:
 
     headers = request.headers
     authorization = headers.get("authorization")
@@ -108,8 +110,6 @@ def check_condition(user: User, item: SQLModel, condition : str = ALWAYS):
     return condition == ALWAYS
 
 
-
-
 def require_permission(
         resource: str, 
         action: str, 
@@ -118,7 +118,7 @@ def require_permission(
     
     async def permission_checker(
             request: Request, 
-            current_user: User | None = Depends(get_authenticated_user),
+            current_user: User | None = Depends(get_current_user),
             session: Session = Depends(get_session)):
         
 
