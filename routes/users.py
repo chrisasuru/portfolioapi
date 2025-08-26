@@ -4,6 +4,7 @@ from ..models.authentication.models import User, Role
 from ..factories.user_factory import UserFactory
 from ..schemas.users import UserRead, UserCreate, UserUpdate
 from ..database.db import engine, get_session
+from ..database.setup import OWNER
 from ..core import utils
 from ..config import settings
 from ..core.security import generate_access_token, require_permission, get_authenticated_user
@@ -81,7 +82,10 @@ async def create_user(user_data: UserCreate,
 @users_router.get("/users/{user_id}", response_model = UserRead)
 async def get_user(user_id: int, 
                    session: Session = Depends(get_session),
-                   has_permission : bool = Depends(require_permission("user", "read"))):
+                   has_permission : bool = Depends(require_permission(
+                          "user", "read", 
+                          condition = OWNER, 
+                          resource_param = "user_id"))):
 
     user = UserFactory(session).get_user_by_id(user_id)
     
@@ -93,7 +97,10 @@ async def get_user(user_id: int,
 async def update_user(user_id: int, 
                       user_data: UserUpdate, 
                       session: Session = Depends(get_session),
-                      has_permission : bool = Depends(require_permission("user", "update"))):
+                      has_permission : bool = Depends(require_permission(
+                          "user", "update", 
+                          condition = OWNER, 
+                          resource_param = "user_id"))):
 
     updated_user = UserFactory(session).update_user(user_id, user_data)
 
@@ -104,8 +111,10 @@ async def update_user(user_id: int,
 @users_router.delete("/users/{user_id}", status_code = status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: int, 
                       session: Session = Depends(get_session),
-                      has_permission : bool = Depends(require_permission("user", "delete"))):
-
+                      has_permission : bool = Depends(require_permission(
+                          "user", "delete", 
+                          condition = OWNER, 
+                          resource_param = "user_id"))):
 
     user = UserFactory(session).delete_user(user_id)
 

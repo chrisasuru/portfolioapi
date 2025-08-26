@@ -126,14 +126,18 @@ def require_permission(
 
             return True
         
+        if not current_user:
+
+            raise HTTPException(
+                status_code = status.HTTP_401_UNAUTHORIZED,
+                detail = "You are not authorized to perform this action."
+            )
+        
         item = None
 
 
-        permission_conditions = [Permission.resource == resource, Permission.action == action]
-
-        if condition:
-
-            permission_conditions.append(Permission.condition == condition)
+        always_permission_statement = select(Permission).where(Permission.resource == resource, Permission.action == action, Permission.condition == ALWAYS)
+        always_permission = session.exec(always_permission_statement).first()
 
         resource_id = None
 
@@ -143,16 +147,12 @@ def require_permission(
             model = get_model_by_table_name(resource)
             item = session.get(model, resource_id)
 
-        combined_conditions = and_(*permission_conditions)
 
-        permission = session.exec(select(Permission).where(combined_conditions)).first()
-        print(permission)
-
-        if not permission:
+        if not always_permission:
 
             raise HTTPException(
-                status = status.HTTP_403_FORBIDDEN,
-                detail = f"The {action} {resource} {resource_id} permission with the condition {condition} does not exist."
+                status = status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail = f"The {action} {resource} permission with the condition {ALWAYS} does not exist."
             )
         
         user_permission_ids = []
@@ -163,11 +163,34 @@ def require_permission(
 
                 user_permission_ids.append(permission.id)
 
-        has_permission = len(set([permission.id, ]).intersection(set(user_permission_ids))) > 0
+        has_always_permission = len(set([always_permission.id, ]).intersection(set(user_permission_ids))) > 0
 
-        if has_permission:
+        if has_always_permission:
 
-            return check_condition(current_user, item, condition = condition)
+            return True
+        
+        
+        if not has_always_permission and condition != ALWAYS and condition:
+
+            conditional_permission_statement = select(Permission).where(Permission.action == action, Permission.resource == resource, Permission.condition == condition)
+            conditional_permission = session.exec(conditional_permission_statement).first()
+            if not conditional_permission:
+
+                raise HTTPException(
+                    status_code = status.HTTP_500_INTERNAL_SERVER_ERROR,
+                    detail = f"The {action} {resource} permission with the condition {condition} does not exist."
+                )
+            
+            has_permission = check_condition(current_user, item, condition = condition)
+
+            if not has_permission:
+
+                raise HTTPException(
+                    status_code = status.HTTP_403_FORBIDDEN,
+                    detail = "You are not authorized to perform this action."
+                )
+
+            return has_permission
         
         raise HTTPException(
             status_code = status.HTTP_403_FORBIDDEN,

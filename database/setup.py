@@ -12,6 +12,9 @@ from ..core import utils
 from pydantic import EmailStr
 import os
 
+ADMIN = "admin"
+SUPER_ADMIN = "super_admin"
+
 CREATE = "create"
 READ = "read"
 UPDATE = "update"
@@ -69,7 +72,8 @@ class RBACInitializer:
             (IMPERSONATE, USER, 'Impersonate users', ALWAYS),
             (ACTIVATE, USER, 'Activate/deactivate users', ALWAYS),
             (READ, USER, "Read their own profile", OWNER),
-            (UPDATE, USER, "Update their own profile", OWNER)
+            (UPDATE, USER, "Update their own profile", OWNER),
+            (DELETE, USER, "Delete their own profile", OWNER)
         ]
 
         for action, resource, description, condition in permissions_data:
@@ -132,7 +136,13 @@ class RBACInitializer:
                 if permission:
                     # Append the permission using the relationship list
                     role.permissions.append(permission)
-        
+        else:
+            
+            permissions = self.session.exec(select(Permission)).all()
+            for permission in permissions:
+
+                role.permissions.append(permission)
+            
         # We need to commit again to save the permissions added to the role
         self.session.commit()
         return role
