@@ -1,76 +1,59 @@
-from fastapi import APIRouter, Depends, HTTPException, Form
+from fastapi import APIRouter, Depends
 from fastapi import status
 from ..models.auth.user import User
 from ..services.auth.users_service import UserService
-from ..schemas.users import UserRead, UserCreate, UserUpdate
-from ..database.db import engine, get_session
-from ..database.setup import OWNER
-from ..core import utils
+from ..schemas.auth.users import UserRead, UserCreate, UserUpdate
+from ..database.db import get_session
+from ..models.auth.permission import PermissionCondition, PermissionAction
+from ..models.root import USER_TABLE_NAME
+from ..schemas.pagination import PaginatedResponse
+from ..core.pagination.dependencies import get_query_parameters, get_pagination_params
 from ..config import settings
-from ..core.security import generate_access_token, require_permission, get_current_user
-from sqlmodel import Session, select
-from sqlalchemy import func
-from datetime import datetime, timezone
-from typing import Annotated
-
-users_router = APIRouter()
+from ..core.rbac.dependencies import require_permission
+from sqlmodel import Session
 
 
-@users_router.post("/token")
-async def login(username: Annotated[str, Form()], password: Annotated[str, Form()], session: Session = Depends(get_session)):
+user_router = APIRouter(prefix="/v1")
 
-    statement = select(User).where(User.username == username)
-    user = session.exec(statement).first()
 
-    if not user or not utils.check_password(password, user.password):
-
-        raise HTTPException(
-            status_code = status.HTTP_401_UNAUTHORIZED,
-            detail = "Invalid username or password"
-        )
+@user_router.get("/users", response_model = PaginatedResponse)
+async def list_users(query_parameters: dict = Depends(get_query_parameters),
+                     pagination_params: str = Depends(get_pagination_params),
+                     session: Session = Depends(get_session),
+                     has_permission: bool = Depends(require_permission(PermissionAction.LIST, USER_TABLE_NAME))):
     
-    user.last_login = datetime.now(timezone.utc)
-
-    session.add(user)
-    session.commit()
-    session.refresh(user)
-
-    access_token = generate_access_token(user.id)
-
-    return {
-        "access_token": access_token,
-        "token_type": "bearer"
-    }
-
     
+    page = query_parameters["page"]
+    page_size = query_parameters["page_size"]
+    offset = (page - 1) * page_size
 
-
-@users_router.get("/users", response_model = utils.PaginatedResponse)
-async def list_users(page: int = 1, 
-                     session: Session = Depends(get_session), 
-                     has_permission : bool = Depends(require_permission("user", "list"))):
-
-    offset = (page - 1) * settings.DEFAULT_PAGE_SIZE
-
-    count_statement = select(func.count(User.id))
-    count = session.exec(count_statement).one()
-    statement = select(User).offset(offset).limit(settings.DEFAULT_PAGE_SIZE)
-    users = session.exec(statement).all()
+    users, count = UserService.get_users(
+        session, 
+        q = query_parameters["q"],
+        page = page,
+        page_size = page_size,
+        sort = query_parameters["sort"]
+    )
 
     users = [UserRead.model_validate(user) for user in users]
 
-    return utils.PaginatedResponse(
+    next_page = None if (offset + page_size) >= count else f"/v1/users?page={page + 1}&{pagination_params}"
+    previous_page = None if page == 1 else f"/v1/users?page={page - 1}&{pagination_params}"
+
+
+    return PaginatedResponse(
         results = users,
         count = count,
-        next = None if offset + settings.DEFAULT_PAGE_SIZE >= count else f"/v1/users?page={page + 1}",
-        previous = None if page <= 1 else f"/v1/users?page={page - 1}"
+        next = None if (offset + page_size) >= count else next_page,
+        previous = None if page == 1 else previous_page,
     )
 
 
-@users_router.post("/users", status_code = status.HTTP_201_CREATED, response_model = UserRead)
+
+@user_router.post("/users", status_code = status.HTTP_201_CREATED, response_model = UserRead)
 async def create_user(user_data: UserCreate, 
                       session: Session = Depends(get_session),
-                      has_permission : bool = Depends(require_permission("user", "create"))):
+                      has_permission : bool = Depends(require_permission(PermissionAction.CREATE, USER_TABLE_NAME))):
     
     
     created_user = UserService.create_user(session, user_data)
@@ -79,13 +62,12 @@ async def create_user(user_data: UserCreate,
         
     return created_user_schema
 
-@users_router.get("/users/{user_id}", response_model = UserRead)
+@user_router.get("/users/{user_id}", response_model = UserRead)
 async def get_user(user_id: int, 
                    session: Session = Depends(get_session),
                    has_permission : bool = Depends(require_permission(
-                          "user", "read", 
-                          condition = OWNER, 
-                          resource_param = "user_id"))):
+                          PermissionAction.READ, USER_TABLE_NAME, lookup_field = "user_id"))):
+    
 
     user = UserService.get_user_by_id(session, user_id)
     
@@ -93,14 +75,12 @@ async def get_user(user_id: int,
 
     return user_schema
 
-@users_router.put("/users/{user_id}", response_model = UserRead)
+@user_router.put("/users/{user_id}", response_model = UserRead)
 async def update_user(user_id: int, 
                       user_data: UserUpdate, 
                       session: Session = Depends(get_session),
                       has_permission : bool = Depends(require_permission(
-                          "user", "update", 
-                          condition = OWNER, 
-                          resource_param = "user_id"))):
+                          PermissionAction.UPDATE, USER_TABLE_NAME, lookup_field = "user_id"))):
 
     updated_user = UserService.update_user(session, user_id, user_data)
 
@@ -108,13 +88,11 @@ async def update_user(user_id: int,
 
     return updated_user_schema
 
-@users_router.delete("/users/{user_id}", status_code = status.HTTP_204_NO_CONTENT)
+@user_router.delete("/users/{user_id}", status_code = status.HTTP_204_NO_CONTENT)
 async def delete_user(user_id: int, 
                       session: Session = Depends(get_session),
                       has_permission : bool = Depends(require_permission(
-                          "user", "delete", 
-                          condition = OWNER, 
-                          resource_param = "user_id"))):
+                          PermissionAction.DELETE, USER_TABLE_NAME, lookup_field = "user_id"))):
 
     user = UserService.delete_user(session, user_id)
 

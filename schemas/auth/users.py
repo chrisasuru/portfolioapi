@@ -1,6 +1,6 @@
 from pydantic import BaseModel, EmailStr, field_validator, model_validator, ConfigDict, Field
 from typing import Optional
-from ..config import settings
+from ...config import settings
 from datetime import datetime
 
 

@@ -3,6 +3,7 @@ from pydantic import EmailStr
 from typing import Optional
 from datetime import datetime, timezone
 from .links import UserRoleLink
+from fastapi import HTTPException, status
 
 class User(SQLModel, table = True):
 
@@ -20,3 +21,21 @@ class User(SQLModel, table = True):
         back_populates = "users",
         link_model = UserRoleLink
     )
+    blog_comments: list["BlogComment"] = Relationship(
+        back_populates = "author"
+    )
+    blog_posts: list["BlogPost"] = Relationship(
+        back_populates = "author"
+    )
+
+    def get_highest_rank(self):
+
+        highest_rank = 0
+
+        for role in self.roles:
+
+            if role.rank > highest_rank:
+
+                highest_rank = role.rank
+
+        return highest_rank
